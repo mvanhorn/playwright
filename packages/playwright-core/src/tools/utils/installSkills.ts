@@ -27,7 +27,7 @@ export const allSkills = ['playwright-cli', 'playwright-component-testing', 'pla
 export type SkillName = typeof allSkills[number];
 export type SkillTarget = 'claude' | 'agents';
 
-export async function installSkills(skills: readonly SkillName[], target: SkillTarget = 'claude', options?: { global?: boolean }) {
+export async function installSkills(skills: readonly SkillName[], target: SkillTarget = 'claude', options?: { global?: boolean, cliCommand?: string }) {
   const cwd = process.cwd();
   const baseDir = options?.global ? os.homedir() : cwd;
   for (const skill of skills) {
@@ -36,6 +36,35 @@ export async function installSkills(skills: readonly SkillName[], target: SkillT
       throw new Error(`Skill source directory not found: ${sourceDir}`);
     const destDir = path.join(baseDir, `.${target}`, 'skills', skill);
     await fs.promises.cp(sourceDir, destDir, { recursive: true });
+    if (skill === 'playwright-cli' && options?.cliCommand)
+      await renderPlaywrightCliCommand(destDir, options.cliCommand);
     console.log(`✅ Skill installed to \`${options?.global ? destDir : path.relative(cwd, destDir)}\`.`);
   }
+}
+
+async function renderPlaywrightCliCommand(dir: string, cliCommand: string) {
+  for (const entry of await fs.promises.readdir(dir, { withFileTypes: true })) {
+    const entryPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      await renderPlaywrightCliCommand(entryPath, cliCommand);
+    } else if (entry.name.endsWith('.md')) {
+      const content = await fs.promises.readFile(entryPath, 'utf8');
+      await fs.promises.writeFile(entryPath, renderShellCommands(content, cliCommand));
+    }
+  }
+}
+
+function renderShellCommands(content: string, cliCommand: string) {
+  const shellLanguages = new Set(['bash', 'batch', 'powershell', 'ps1', 'sh', 'shell', 'zsh']);
+  let inShellBlock = false;
+  return content.split('\n').map(line => {
+    const fence = line.match(/^```(\S*)\s*$/);
+    if (fence) {
+      inShellBlock = inShellBlock ? false : shellLanguages.has(fence[1]);
+      return line;
+    }
+    if (!inShellBlock)
+      return line;
+    return line.replace(/(^\s*(?:>\s*)?|(?:\$\(|&&|\|\||[;|])\s*)playwright-cli(?=\s|$)/g, (_, prefix) => prefix + cliCommand);
+  }).join('\n');
 }

@@ -99,7 +99,7 @@ export async function initWorkspace(initSkills: string | undefined, initSkillsGl
   if (skills) {
     const target = skills === 'agents' ? 'agents' : 'claude';
     try {
-      await installSkills(['playwright-cli'], target, { global: globalSkills });
+      await installSkills(['playwright-cli'], target, { global: globalSkills, cliCommand: 'npx playwright cli' });
     } catch (error) {
       console.error('❌', error instanceof Error ? error.message : error);
       // eslint-disable-next-line no-restricted-properties

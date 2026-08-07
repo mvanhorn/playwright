@@ -18,6 +18,8 @@ import fs from 'fs';
 import path from 'path';
 import { test, expect } from './cli-fixtures';
 
+const executablePlaywrightCli = /(^\s*(?:>\s*)?|(?:\$\(|&&|\|\||[;|])\s*)playwright-cli(?=\s|$)/m;
+
 test('daemon shuts down on browser launch failure', async ({ cli, server }) => {
   const first = await cli('open', server.PREFIX, { env: { PLAYWRIGHT_MCP_EXECUTABLE_PATH: '/nonexistent/browser/path' } });
   expect(first.error).toContain(`executable doesn't exist`);
@@ -46,6 +48,13 @@ test('install workspace w/skills', async ({ cli }, testInfo) => {
 
   const skillFile = testInfo.outputPath('.claude', 'skills', 'playwright-cli', 'SKILL.md');
   expect(fs.existsSync(skillFile)).toBe(true);
+  const skillContent = await fs.promises.readFile(skillFile, 'utf8');
+  expect(skillContent).toContain('npx playwright cli open');
+  expect(skillContent).toContain('TOKEN=$(npx playwright cli --raw cookie-get session_id)');
+  expect(skillContent).not.toMatch(executablePlaywrightCli);
+  expect(skillContent).toContain('name: playwright-cli');
+  expect(skillContent).toContain('allowed-tools: Bash(playwright-cli:*) Bash(npx:*) Bash(npm:*)');
+  expect(skillContent).toContain('[Snapshot](.playwright-cli/');
 
   const referencesDir = testInfo.outputPath('.claude', 'skills', 'playwright-cli', 'references');
   const references = await fs.promises.readdir(referencesDir);
@@ -58,6 +67,15 @@ test('install workspace w/--skills=agents', async ({ cli }, testInfo) => {
 
   const skillFile = testInfo.outputPath('.agents', 'skills', 'playwright-cli', 'SKILL.md');
   expect(fs.existsSync(skillFile)).toBe(true);
+  const skillContent = await fs.promises.readFile(skillFile, 'utf8');
+  expect(skillContent).toContain('npx playwright cli open');
+  expect(skillContent).not.toMatch(executablePlaywrightCli);
+
+  const referenceFile = testInfo.outputPath('.agents', 'skills', 'playwright-cli', 'references', 'tracing.md');
+  const referenceContent = await fs.promises.readFile(referenceFile, 'utf8');
+  expect(referenceContent).toContain('npx playwright cli tracing-start');
+  expect(referenceContent).not.toMatch(executablePlaywrightCli);
+  expect(referenceContent).toContain('find .playwright-cli/traces -mtime +7 -delete');
 });
 
 test('install w/--skills -g installs into the home directory', async ({ cli }, testInfo) => {
